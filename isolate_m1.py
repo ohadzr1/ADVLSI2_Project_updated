@@ -7,7 +7,7 @@ def final_extract_m1(input_file):
     ly.read(input_file)
     top_cell = ly.top_cell()
     
-    # Sky130 Metal 1 definition (Layer 68, Datatype 20)
+    # Sky130 Metal1 definition (Layer 68, Datatype 20)
     target_layer, target_datatype = 68, 20
     m1_index = ly.find_layer(target_layer, target_datatype)
     
