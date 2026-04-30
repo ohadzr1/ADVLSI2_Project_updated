@@ -36,9 +36,12 @@ def extract_m1(input_file):
     out_layer = out_ly.layer(target_layer, target_datatype)
     out_top.shapes(out_layer).insert(m1_region)
     
+    output_dir = "dataset_output"
+    os.makedirs(output_dir, exist_ok=True)
+
     # Generate output filename based on original input name
     file_base = os.path.splitext(os.path.basename(input_file))[0]
-    output_gds = f"{file_base}_M1.gds"
+    output_gds = os.path.join(output_dir, f"{file_base}_M1.gds")
     
     # Write the result to disk
     out_ly.write(output_gds)
@@ -46,4 +49,4 @@ def extract_m1(input_file):
 
 if __name__ == "__main__":
     # Ensure the input filename is correct
-    extract_m1("tt_um_yen.oas")
+    extract_m1("real_layouts_tt/tt_um_yen.oas")

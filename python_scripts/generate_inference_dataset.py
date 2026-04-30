@@ -5,7 +5,8 @@ from PIL import Image, ImageDraw
 from extract_m1 import extract_m1
 
 # --- CONFIGURATION (Based on your training parameters) ---
-INPUT_GDS = "tt_um_yen_M1.gds"
+INPUT_GDS = "real_layouts_tt/tt_um_yen.oas"
+GENERATED_DIR = "dataset_output"
 OUTPUT_DIR = "inference_dataset"
 METAL_LAYER = (68, 20)
 
@@ -22,7 +23,8 @@ def generate_inference_dataset():
     # 1. Extract Metal 1 layer using your existing function
     print(f"[*] Extracting Metal 1 from {INPUT_GDS}...")
     extract_m1(INPUT_GDS)
-    m1_gds = INPUT_GDS.replace(".gds", "_M1.gds")
+    file_base = os.path.splitext(os.path.basename(INPUT_GDS))[0]
+    m1_gds = os.path.join(GENERATED_DIR, f"{file_base}_M1.gds")
 
     # 2. Load the layout and get the Metal 1 region
     layout = db.Layout()

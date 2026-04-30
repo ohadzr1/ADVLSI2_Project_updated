@@ -1,9 +1,10 @@
 import klayout.db as db
 import klayout.rdb as rdb
+import os
 
 # --- CONFIGURATION ---
-RDB_FILE = "sky130_drc.txt"                    
-OUTPUT_MASK_FILE = "drc_mask_layer_255.oas"      
+RDB_FILE = "dataset_output/sky130_drc.txt"                    
+OUTPUT_MASK_FILE = "dataset_output/drc_mask_layer_255.oas"      
 MASK_LAYER = (255, 0)                          
 TARGET_NAME = "m1.2"                     
 
@@ -59,6 +60,7 @@ def extract_drc_mask_from_rdb():
 
     # 6. Save the mask output
     if violation_count > 0:
+        os.makedirs(os.path.dirname(OUTPUT_MASK_FILE), exist_ok=True)
         layout.write(OUTPUT_MASK_FILE)
         print(f"\nSuccess! Extracted {violation_count} violations from '{TARGET_NAME}'.")
         print(f"Mask file saved: {OUTPUT_MASK_FILE}")

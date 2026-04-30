@@ -3,7 +3,7 @@ import random
 import os
 import math
 
-INPUT_FILE_NAME = "tt_um_yen_M1.gds"
+INPUT_FILE_NAME = "dataset_output/tt_um_yen_M1.gds"
 M1_LAYER_NUM = 68
 M1_DATATYPE = 20
 MARKING_LAYER_NUM = 255

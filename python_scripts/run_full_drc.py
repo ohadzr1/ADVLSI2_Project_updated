@@ -5,8 +5,8 @@ import os
 # The path to your KLayout executable (if it's in your system PATH, just "klayout" works)
 KLAYOUT_CMD = r"C:\Users\ohadz\AppData\Roaming\KLayout\klayout_app.exe"
 
-# The actual DRC script file for sky130 (update this to your actual .lydrc or .drc file name)
-DRC_SCRIPT = "run_drc_full.lydrc" 
+# The actual DRC script file for sky130 (use the .drc file directly for batch mode)
+DRC_SCRIPT = "sky130_drc_deck/run_drc_full.lydrc" 
 
 def run_full_drc(input_gds, output_rdb):
     """
@@ -18,6 +18,10 @@ def run_full_drc(input_gds, output_rdb):
         print("Please ensure the sky130 DRC rule deck is in the folder.")
         return False
 
+    # Convert to absolute paths to guarantee KLayout finds and saves them correctly
+    abs_input = os.path.abspath(input_gds)
+    abs_output = os.path.abspath(output_rdb)
+
     print(f"[*] Starting KLayout DRC Engine in batch mode...")
     
     # Constructing the CLI command
@@ -28,8 +32,8 @@ def run_full_drc(input_gds, output_rdb):
         KLAYOUT_CMD,
         "-b", 
         "-r", DRC_SCRIPT,
-        "-rd", f"input={input_gds}",
-        "-rd", f"report={output_rdb}"
+        "-rd", f"input={abs_input}",
+        "-rd", f"report={abs_output}"
     ]
 
     try:
@@ -45,4 +49,4 @@ def run_full_drc(input_gds, output_rdb):
         return False
 
 if __name__ == "__main__":
-    run_full_drc("tt_um_yen_M1_m1_2_Marked.gds", "sky130_drc.txt")
+    run_full_drc("dataset_output/tt_um_yen_M1_m1_2_Marked.gds", "dataset_output/sky130_drc.txt")

@@ -11,10 +11,11 @@ from generate_training_dataset import generate_dataset
 from visualize_dataset_matrices import visualize_dataset_matrices
 
 # --- CONFIGURATION ---
-ORIGINAL_GDS = "tt_um_yen.oas" 
-EXTRACTED_M1_GDS = "tt_um_yen_M1.gds"
-INJECTED_GDS = "tt_um_yen_M1_m1_2_Marked.gds" 
-DRC_REPORT = "sky130_drc.txt"
+ORIGINAL_GDS = "real_layouts_tt/tt_um_yen.oas" 
+EXTRACTED_M1_GDS = "dataset_output/tt_um_yen_M1.gds"
+INJECTED_GDS = "dataset_output/tt_um_yen_M1_m1_2_Marked.gds" 
+DRC_REPORT = "dataset_output/sky130_drc.txt"
+MASK_FILE = "dataset_output/drc_mask_layer_255.oas"
 ERROR_COUNT = 400              
 
 def clean_dataset_folder():
@@ -24,11 +25,13 @@ def clean_dataset_folder():
         print(f"[*] Cleaning up old '{dataset_path}' directory...")
         shutil.rmtree(dataset_path)
     
-    files_to_clean = [DRC_REPORT, "drc_mask_layer_255.oas", EXTRACTED_M1_GDS, INJECTED_GDS]
+    files_to_clean = [DRC_REPORT, MASK_FILE, EXTRACTED_M1_GDS, INJECTED_GDS]
     for f in files_to_clean:
         if os.path.exists(f):
             os.remove(f)
             
+    # Create the required folder for interim layout and data files
+    os.makedirs("dataset_output", exist_ok=True)
     time.sleep(0.5)
 
 def main():

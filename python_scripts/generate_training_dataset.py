@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import os
 
-INPUT_LAYOUT = "tt_um_yen_M1_m1_2_Marked.gds" 
+INPUT_LAYOUT = "dataset_output/tt_um_yen_M1_m1_2_Marked.gds" 
 METAL_LAYER = (68, 20)
 
 MASK_LAYOUT = INPUT_LAYOUT 
