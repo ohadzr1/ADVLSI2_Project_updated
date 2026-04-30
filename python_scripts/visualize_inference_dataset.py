@@ -5,7 +5,7 @@ import random
 
 # --- CONFIGURATION ---
 # Path to the folder containing the generated .npy inference tiles
-DATASET_PATH = "inference_tiles"
+DATASET_PATH = "inference_dataset"
 
 # Add specific coordinates here to inspect them (e.g., "x7000_y7500")
 SPECIFIC_LOCATIONS = []

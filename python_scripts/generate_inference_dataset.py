@@ -5,8 +5,8 @@ from PIL import Image, ImageDraw
 from extract_m1 import extract_m1
 
 # --- CONFIGURATION (Based on your training parameters) ---
-INPUT_GDS = "tt_um_yen_M1_mytest.gds"
-OUTPUT_DIR = "inference_tiles"
+INPUT_GDS = "tt_um_yen_M1.gds"
+OUTPUT_DIR = "inference_dataset"
 METAL_LAYER = (68, 20)
 
 # Physical window size used during training
