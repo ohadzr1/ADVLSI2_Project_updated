@@ -5,9 +5,10 @@ from PIL import Image, ImageDraw
 from extract_m1 import extract_m1
 
 # --- CONFIGURATION (Based on your training parameters) ---
-INPUT_GDS = "real_layouts_tt/tt_um_yen.oas"
-GENERATED_DIR = "dataset_output"
-OUTPUT_DIR = "inference_dataset"
+LAYOUT_NAME = "tt_um_yen"
+INPUT_GDS = f"real_layouts_tt/{LAYOUT_NAME}.oas"
+GENERATED_DIR = f"outputs/{LAYOUT_NAME}/dataset_output"
+OUTPUT_DIR = f"outputs/{LAYOUT_NAME}/inference_dataset"
 METAL_LAYER = (68, 20)
 
 # Physical window size used during training
@@ -19,12 +20,12 @@ IMAGE_SIZE = 200
 # Ratio to convert nm coordinates to pixels (0.125)
 SCALE_FACTOR = IMAGE_SIZE / PHYSICAL_SIZE 
 
-def generate_inference_dataset():
+def generate_inference_dataset(input_gds=INPUT_GDS, generated_dir=GENERATED_DIR, output_dir=OUTPUT_DIR):
     # 1. Extract Metal 1 layer using your existing function
-    print(f"[*] Extracting Metal 1 from {INPUT_GDS}...")
-    extract_m1(INPUT_GDS)
-    file_base = os.path.splitext(os.path.basename(INPUT_GDS))[0]
-    m1_gds = os.path.join(GENERATED_DIR, f"{file_base}_M1.gds")
+    print(f"[*] Extracting Metal 1 from {input_gds}...")
+    extract_m1(input_gds, generated_dir)
+    file_base = os.path.splitext(os.path.basename(input_gds))[0]
+    m1_gds = os.path.join(generated_dir, f"{file_base}_M1.gds")
 
     # 2. Load the layout and get the Metal 1 region
     layout = db.Layout()
@@ -34,8 +35,8 @@ def generate_inference_dataset():
     metal_region = db.Region(top_cell.begin_shapes_rec(layer_idx))
     bbox = metal_region.bbox()
 
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     # 3. Calculate total steps for progress tracking
     x_range = range(bbox.left, bbox.right - PHYSICAL_SIZE, STRIDE)
@@ -78,7 +79,7 @@ def generate_inference_dataset():
                 # Optional: Only save if there is significant metal density
                 if np.mean(matrix) > 0.01:
                     file_name = f"tile_x{x}_y{y}.npy"
-                    np.save(os.path.join(OUTPUT_DIR, file_name), matrix)
+                    np.save(os.path.join(output_dir, file_name), matrix)
                     saved_count += 1
 
             # Print progress percentage every 500 tiles
@@ -86,7 +87,7 @@ def generate_inference_dataset():
                 progress = (processed_count / total_steps) * 100
                 print(f"[>] Progress: {progress:.1f}% | Tiles Saved: {saved_count}")
 
-    print(f"\n Done! Processed {total_steps} areas. Saved {saved_count} tiles to '{OUTPUT_DIR}'.")
+    print(f"\n Done! Processed {total_steps} areas. Saved {saved_count} tiles to '{output_dir}'.")
 
 if __name__ == "__main__":
     generate_inference_dataset()

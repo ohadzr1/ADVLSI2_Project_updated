@@ -6,37 +6,38 @@ import time
 from run_full_drc import run_full_drc
 from extract_m1 import extract_m1
 from extract_drc_mask_from_rdb import extract_drc_mask_from_rdb
-from inject_drc_error import inject_isolated_m1_2_errors, INPUT_FILE_NAME
+from inject_drc_error import inject_isolated_m1_2_errors
 from generate_training_dataset import generate_dataset
 from visualize_dataset_matrices import visualize_dataset_matrices
 
 # --- CONFIGURATION ---
-ORIGINAL_GDS = "real_layouts_tt/tt_um_yen.oas" 
-EXTRACTED_M1_GDS = "dataset_output/tt_um_yen_M1.gds"
-INJECTED_GDS = "dataset_output/tt_um_yen_M1_m1_2_Marked.gds" 
-DRC_REPORT = "dataset_output/sky130_drc.txt"
-MASK_FILE = "dataset_output/drc_mask_layer_255.oas"
+LAYOUT_NAME = "tt_um_yen"
+ORIGINAL_GDS = f"real_layouts_tt/{LAYOUT_NAME}.oas" 
+BASE_OUT_DIR = f"outputs/{LAYOUT_NAME}"
+DATASET_OUTPUT = f"{BASE_OUT_DIR}/dataset_output"
+TRAINING_DATASET = f"{BASE_OUT_DIR}/training_dataset"
+
+EXTRACTED_M1_GDS = f"{DATASET_OUTPUT}/{LAYOUT_NAME}_M1.gds"
+INJECTED_GDS = f"{DATASET_OUTPUT}/{LAYOUT_NAME}_M1_m1_2_Marked.gds" 
+DRC_REPORT = f"{DATASET_OUTPUT}/sky130_drc.txt"
+MASK_FILE = f"{DATASET_OUTPUT}/drc_mask_layer_255.oas"
 ERROR_COUNT = 400              
 
 def clean_dataset_folder():
     """Automatically delete old data to prevent dataset contamination."""
-    dataset_path = "training_dataset"
-    if os.path.exists(dataset_path):
-        print(f"[*] Cleaning up old '{dataset_path}' directory...")
-        shutil.rmtree(dataset_path)
-    
-    files_to_clean = [DRC_REPORT, MASK_FILE, EXTRACTED_M1_GDS, INJECTED_GDS]
-    for f in files_to_clean:
-        if os.path.exists(f):
-            os.remove(f)
+    if os.path.exists(BASE_OUT_DIR):
+        print(f"[*] Cleaning up old '{BASE_OUT_DIR}' directory...")
+        shutil.rmtree(BASE_OUT_DIR)
+
             
-    # Create the required folder for interim layout and data files
-    os.makedirs("dataset_output", exist_ok=True)
+    # Create the required folders for the new layout
+    os.makedirs(DATASET_OUTPUT, exist_ok=True)
+    os.makedirs(TRAINING_DATASET, exist_ok=True)
     time.sleep(0.5)
 
 def main():
     print("="*60)
-    print(" STARTING FULL AUTONOMOUS DRC PIPELINE")
+    print(f" STARTING FULL AUTONOMOUS DRC PIPELINE FOR: {LAYOUT_NAME}")  
     print("="*60)
 
     # Step 0: Cleanup
@@ -44,11 +45,11 @@ def main():
 
     # Step 1: Extract Metal
     print("\n>>> STEP 1: Extracting M1 (Layer 68/20) from original layout <<<")
-    extract_m1(ORIGINAL_GDS)
+    extract_m1(ORIGINAL_GDS, DATASET_OUTPUT)
 
     # Step 2: Inject Errors
     print("\n>>> STEP 2: Injecting NEW DRC Errors into the M1 layout <<<")
-    inject_isolated_m1_2_errors(INPUT_FILE_NAME, num_errors=ERROR_COUNT)
+    inject_isolated_m1_2_errors(EXTRACTED_M1_GDS, num_errors=ERROR_COUNT)
     
     # Step 3: Run DRC
     print(f"\n>>> STEP 3: Running KLayout DRC Engine on {INJECTED_GDS} <<<")
@@ -59,16 +60,16 @@ def main():
 
     # Step 4: Process RDB
     print("\n>>> STEP 4: Extracting verified violations from RDB to Mask <<<")
-    total_drc_errors_found = extract_drc_mask_from_rdb()
+    total_drc_errors_found = extract_drc_mask_from_rdb(DRC_REPORT, MASK_FILE)
     
     # Step 5: Tiling & Matrix Conversion
     print("\n>>> STEP 5: Generating Dataset Tiles (Matrix conversion) <<<")
     # Capture the image counts returned from the function
-    v_count, c_count = generate_dataset()
+    v_count, c_count = generate_dataset(INJECTED_GDS, TRAINING_DATASET)
     
     # Step 6: Visualization
     print("\n>>> STEP 6: Visualizing Results (Sanity Check) <<<")
-    visualize_dataset_matrices()
+    visualize_dataset_matrices(f"{TRAINING_DATASET}/clean", f"{TRAINING_DATASET}/dirty")
     
     # --- FINAL SUMMARY REPORT ---
     print("\n" + "="*60)

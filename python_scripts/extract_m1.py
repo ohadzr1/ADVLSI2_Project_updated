@@ -1,7 +1,7 @@
 import klayout.db as db
 import os
 
-def extract_m1(input_file):
+def extract_m1(input_file, output_dir="dataset_output"):
     # Load the layout
     ly = db.Layout()
     ly.read(input_file)
@@ -36,7 +36,6 @@ def extract_m1(input_file):
     out_layer = out_ly.layer(target_layer, target_datatype)
     out_top.shapes(out_layer).insert(m1_region)
     
-    output_dir = "dataset_output"
     os.makedirs(output_dir, exist_ok=True)
 
     # Generate output filename based on original input name

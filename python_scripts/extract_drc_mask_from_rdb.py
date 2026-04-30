@@ -8,7 +8,7 @@ OUTPUT_MASK_FILE = "dataset_output/drc_mask_layer_255.oas"
 MASK_LAYER = (255, 0)                          
 TARGET_NAME = "m1.2"                     
 
-def extract_drc_mask_from_rdb():
+def extract_drc_mask_from_rdb(rdb_file=RDB_FILE, output_mask_file=OUTPUT_MASK_FILE):
     # 1. Create a new, empty layout
     layout = db.Layout()
     # Set the Database Unit (DBU) to 1nm to match the precision of the XML
@@ -18,7 +18,7 @@ def extract_drc_mask_from_rdb():
     
     # 2. Load the DRC database (RDB)
     rdb_data = rdb.ReportDatabase("DRC_Database")
-    rdb_data.load(RDB_FILE)
+    rdb_data.load(rdb_file)
     
     print("Processing all DRC items...")
     
@@ -60,10 +60,10 @@ def extract_drc_mask_from_rdb():
 
     # 6. Save the mask output
     if violation_count > 0:
-        os.makedirs(os.path.dirname(OUTPUT_MASK_FILE), exist_ok=True)
-        layout.write(OUTPUT_MASK_FILE)
+        os.makedirs(os.path.dirname(output_mask_file), exist_ok=True)
+        layout.write(output_mask_file)
         print(f"\nSuccess! Extracted {violation_count} violations from '{TARGET_NAME}'.")
-        print(f"Mask file saved: {OUTPUT_MASK_FILE}")
+        print(f"Mask file saved: {output_mask_file}")
     else:
         print(f"\nNo violations found for category '{TARGET_NAME}'.")
     

@@ -5,9 +5,11 @@ import random
 
 # --- CONFIGURATION ---
 # Path to the folder containing the generated .npy inference tiles
-DATASET_PATH = "inference_dataset"
+LAYOUT_NAME = "tt_um_yen"
+DATASET_PATH = f"outputs/{LAYOUT_NAME}/inference_dataset"
 
 # Add specific coordinates here to inspect them (e.g., "x7000_y7500")
+#SPECIFIC_LOCATIONS = ["x151000_y58500","x151000_y147000","x16000_y48000","x20500_y129000","x67000_y100500","x67000_y46500"]
 SPECIFIC_LOCATIONS = []
 
 # Number of random tiles to show if SPECIFIC_LOCATIONS is empty

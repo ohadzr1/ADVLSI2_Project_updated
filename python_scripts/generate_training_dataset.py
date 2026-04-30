@@ -16,21 +16,22 @@ IMAGE_SIZE = 200
 MARGIN = 600
 OUTPUT_DIR = "training_dataset"
 
-def generate_dataset():
+def generate_dataset(input_layout=INPUT_LAYOUT, output_dir=OUTPUT_DIR):
     layout_metal = db.Layout()
-    layout_metal.read(INPUT_LAYOUT)
+    layout_metal.read(input_layout)
     top_cell_metal = layout_metal.top_cell()
     
     metal_idx = layout_metal.find_layer(*METAL_LAYER)
     metal_region = db.Region(top_cell_metal.begin_shapes_rec(metal_idx))
 
+    # Mask layout is the same as the input layout in our unified file approach
     mask_idx = layout_metal.find_layer(*MASK_LAYER)
     mask_region = db.Region(top_cell_metal.begin_shapes_rec(mask_idx))
 
     bbox = metal_region.bbox()
 
-    os.makedirs(f"{OUTPUT_DIR}/clean", exist_ok=True)
-    os.makedirs(f"{OUTPUT_DIR}/dirty", exist_ok=True)
+    os.makedirs(f"{output_dir}/clean", exist_ok=True)
+    os.makedirs(f"{output_dir}/dirty", exist_ok=True)
 
     dirty_count = 0
     clean_count = 0
@@ -101,10 +102,10 @@ def generate_dataset():
                 continue
 
             if is_dirty:
-                np.save(f"{OUTPUT_DIR}/dirty/tile_{x}_{y}.npy", matrix)
+                np.save(f"{output_dir}/dirty/tile_{x}_{y}.npy", matrix)
                 dirty_count += 1
             else:
-                np.save(f"{OUTPUT_DIR}/clean/tile_{x}_{y}.npy", matrix)
+                np.save(f"{output_dir}/clean/tile_{x}_{y}.npy", matrix)
                 clean_count += 1
 
     print(f"Total Dirty: {dirty_count} | Total Clean: {clean_count} | Discarded Edge Errors: {discard_count}")

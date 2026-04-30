@@ -4,8 +4,12 @@ import os
 import random
 
 # --- CONFIGURATION ---
-CLEAN_DIR = "training_dataset/clean"
-DIRTY_DIR = "training_dataset/dirty"
+# This should match the LAYOUT_NAME used in the generation scripts
+LAYOUT_NAME = "tt_um_yen" 
+BASE_OUT_DIR = f"outputs/{LAYOUT_NAME}"
+TRAINING_DATASET = f"{BASE_OUT_DIR}/training_dataset"
+CLEAN_DIR = f"{TRAINING_DATASET}/clean"
+DIRTY_DIR = f"{TRAINING_DATASET}/dirty"
 NUM_SAMPLES = 6 # 6 per row = 12 samples total
 
 # Plot parameters corresponding to dataset generator
@@ -16,12 +20,20 @@ STRIDE = 400
 # Calculate resolution automatically
 RESOLUTION = WINDOW_SIZE / CLIP_SIZE
 
-def visualize_dataset_matrices():
-    clean_files = [f for f in os.listdir(CLEAN_DIR) if f.endswith('.npy')]
-    dirty_files = [f for f in os.listdir(DIRTY_DIR) if f.endswith('.npy')]
+def visualize_dataset_matrices(clean_dir=CLEAN_DIR, dirty_dir=DIRTY_DIR):
+    # Check if directories exist to provide a clearer error message
+    if not os.path.isdir(clean_dir) or not os.path.isdir(dirty_dir):
+        print(f"Error: One or both dataset directories not found.")
+        print(f"  - Searched for clean directory: {os.path.abspath(clean_dir)}")
+        print(f"  - Searched for dirty directory: {os.path.abspath(dirty_dir)}")
+        print("Please ensure the `LAYOUT_NAME` is correct and the data generation pipeline has been run.")
+        return
+
+    clean_files = [f for f in os.listdir(clean_dir) if f.endswith('.npy')]
+    dirty_files = [f for f in os.listdir(dirty_dir) if f.endswith('.npy')]
 
     if not clean_files or not dirty_files:
-        print("Error: Could not find .npy files in the dataset folders.")
+        print(f"Error: No .npy files found in '{clean_dir}' or '{dirty_dir}'.")
         return
 
     sample_clean = random.sample(clean_files, min(NUM_SAMPLES, len(clean_files)))
@@ -54,7 +66,7 @@ def visualize_dataset_matrices():
 
     # Plot CLEAN samples (Top Row)
     for i, filename in enumerate(sample_clean):
-        filepath = os.path.join(CLEAN_DIR, filename)
+        filepath = os.path.join(clean_dir, filename)
         matrix = np.load(filepath)
         
         # Convert the file name to micron format for the title
@@ -69,7 +81,7 @@ def visualize_dataset_matrices():
 
     # Plot VIOLATION samples (Bottom Row)
     for i, filename in enumerate(sample_dirty):
-        filepath = os.path.join(DIRTY_DIR, filename)
+        filepath = os.path.join(dirty_dir, filename)
         matrix = np.load(filepath)
         
         # Convert the file name to micron format for the title
