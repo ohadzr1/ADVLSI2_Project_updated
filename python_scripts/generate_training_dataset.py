@@ -2,6 +2,7 @@ import klayout.db as db
 import numpy as np
 from PIL import Image, ImageDraw
 import os
+import shutil
 
 INPUT_LAYOUT = "dataset_output/tt_um_yen_M1_m1_2_Marked.gds" 
 METAL_LAYER = (68, 20)
@@ -108,6 +109,8 @@ def generate_dataset(input_layout=INPUT_LAYOUT, output_dir=OUTPUT_DIR):
                 np.save(f"{output_dir}/clean/tile_{x}_{y}.npy", matrix)
                 clean_count += 1
 
+    zip_path = shutil.make_archive(output_dir, "zip", root_dir=output_dir)
+    print(f"Created archive: {zip_path}")
     print(f"Total Dirty: {dirty_count} | Total Clean: {clean_count} | Discarded Edge Errors: {discard_count}")
     return dirty_count, clean_count
 

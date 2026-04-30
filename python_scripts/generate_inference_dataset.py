@@ -1,4 +1,5 @@
 import os
+import shutil
 import numpy as np
 import klayout.db as db
 from PIL import Image, ImageDraw
@@ -87,6 +88,8 @@ def generate_inference_dataset(input_gds=INPUT_GDS, generated_dir=GENERATED_DIR,
                 progress = (processed_count / total_steps) * 100
                 print(f"[>] Progress: {progress:.1f}% | Tiles Saved: {saved_count}")
 
+    zip_path = shutil.make_archive(output_dir, "zip", root_dir=output_dir)
+    print(f"[*] Created archive: {zip_path}")
     print(f"\n Done! Processed {total_steps} areas. Saved {saved_count} tiles to '{output_dir}'.")
 
 if __name__ == "__main__":
