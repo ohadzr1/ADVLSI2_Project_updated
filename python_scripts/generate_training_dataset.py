@@ -17,7 +17,7 @@ IMAGE_SIZE = 200
 MARGIN = 600
 OUTPUT_DIR = "training_dataset"
 
-def generate_dataset(input_layout=INPUT_LAYOUT, output_dir=OUTPUT_DIR):
+def generate_dataset(input_layout=INPUT_LAYOUT, output_dir=OUTPUT_DIR, tile_prefix=""):
     layout_metal = db.Layout()
     layout_metal.read(input_layout)
     top_cell_metal = layout_metal.top_cell()
@@ -102,11 +102,12 @@ def generate_dataset(input_layout=INPUT_LAYOUT, output_dir=OUTPUT_DIR):
             if metal_density < 0.03 or metal_density > 0.85:
                 continue
 
+            fname = f"{tile_prefix}tile_{x}_{y}.npy" if tile_prefix else f"tile_{x}_{y}.npy"
             if is_dirty:
-                np.save(f"{output_dir}/dirty/tile_{x}_{y}.npy", matrix)
+                np.save(f"{output_dir}/dirty/{fname}", matrix)
                 dirty_count += 1
             else:
-                np.save(f"{output_dir}/clean/tile_{x}_{y}.npy", matrix)
+                np.save(f"{output_dir}/clean/{fname}", matrix)
                 clean_count += 1
 
     zip_path = shutil.make_archive(output_dir, "zip", root_dir=output_dir)

@@ -6,7 +6,8 @@ from PIL import Image, ImageDraw
 from extract_m1 import extract_m1
 
 # --- CONFIGURATION (Based on your training parameters) ---
-LAYOUT_NAME = "tt_um_yen"
+#LAYOUT_NAME = "tt_um_yen"
+LAYOUT_NAME = "tt_um_cmos_inverter"
 INPUT_GDS = f"real_layouts_tt/{LAYOUT_NAME}.oas"
 GENERATED_DIR = f"outputs/{LAYOUT_NAME}/dataset_output"
 OUTPUT_DIR = f"outputs/{LAYOUT_NAME}/inference_dataset"

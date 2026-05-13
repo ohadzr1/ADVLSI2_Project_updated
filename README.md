@@ -9,6 +9,7 @@ The pipeline autonomously extracts target layers (e.g., Metal 1) from real layou
 * **Error Injection:** Synthetically injects realistic, isolated spacing violations into the layout.
 * **Automated DRC:** Runs KLayout DRC in batch mode and parses the Report Database (RDB) results.
 * **Dataset Generation:** Tiles the layout into `.npy` matrices and balances clean vs. dirty samples.
+* **Batch Mode:** Processes all layouts in `real_layouts_tt/` and merges them into one combined dataset zip.
 * **Visualization:** Includes built-in tools to visually inspect the resulting matrices for both training and inference.
 
 ## Prerequisites
@@ -25,10 +26,26 @@ pip install numpy matplotlib klayout Pillow
 ## Execution Instructions
 
 ### 1. Run the Full Training Pipeline
-To execute the complete end-to-end flow (Cleanup -> Extract -> Inject -> DRC -> Mask -> Generate Dataset -> Visualize):
+
+The pipeline is controlled through `run_flow.py` and supports three modes:
+
+**Run on the default layout** (`tt_um_cmos_inverter`):
 ```bash
 python run_flow.py
 ```
+
+**Run on a specific layout by name** (must be a `.oas` file inside `real_layouts_tt/`):
+```bash
+python run_flow.py --layout tt_um_yen
+python run_flow.py --layout tt_um_8_bit_cpu
+```
+
+**Run on all layouts** and produce one combined training dataset zip:
+```bash
+python run_flow.py --all
+```
+
+When `--all` is used, each layout is processed individually and its tiles are saved under `outputs/<layout_name>/training_dataset/`. All tiles are then merged into `outputs/combined_training_dataset/` (with a per-layout filename prefix to avoid collisions) and a single `combined_training_dataset.zip` archive is created.
 
 ### 2. Visualize Training Data (Sanity Check)
 If you want to run the dataset visualizer independently without regenerating the data:
