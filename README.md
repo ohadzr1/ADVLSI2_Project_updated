@@ -1,66 +1,596 @@
-# Autonomous DRC Dataset Generation Pipeline
+# Autonomous DRC Dataset Generation & CNN Inference Pipeline
 
-This project contains an automated pipeline for generating VLSI layout datasets aimed at training Machine Learning models (like CNNs) for Design Rule Check (DRC) violation detection. 
+This project provides an end-to-end workflow for **Machine-Learning-based Design Rule Check (DRC)** on Sky130 layouts. It:
 
-The pipeline autonomously extracts target layers (e.g., Metal 1) from real layouts, injects synthetic spacing violations, executes the KLayout DRC engine in batch mode, extracts the verified violations, and slices the layout into labeled (clean vs. dirty) grid matrices.
+1. Extracts Metal 1 (M1) from real layouts
+2. Injects synthetic **m1.2 spacing** violations
+3. Runs KLayout DRC and builds labeled training tiles
+4. Trains a CNN (Google Colab)
+5. Runs fast ONNX inference on a PC with Grad-CAM localization and GDS output
 
-## Features
-* **Layer Extraction:** Isolates target layers (e.g., Sky130 M1) from `.gds` or `.oas` layout files.
-* **Error Injection:** Synthetically injects realistic, isolated spacing violations into the layout.
-* **Automated DRC:** Runs KLayout DRC in batch mode and parses the Report Database (RDB) results.
-* **Dataset Generation:** Tiles the layout into `.npy` matrices and balances clean vs. dirty samples.
-* **Batch Mode:** Processes all layouts in `real_layouts_tt/` and merges them into one combined dataset zip.
-* **Visualization:** Includes built-in tools to visually inspect the resulting matrices for both training and inference.
+**Repository:** https://github.com/ohadzr1/ADVLSI2_Project_updated
+
+---
+
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Quick Start — Full Flows](#quick-start--full-flows)
+- [Part 1: Training Data Pipeline](#part-1-training-data-pipeline-generate_training_dataset_scripts)
+- [Part 2: Google Colab (Training & Basic Inference)](#part-2-google-colab-colab_code_backup)
+- [Part 3: PC Inference — Optimized](#part-3-pc-inference--optimized-run_inference_pc_optimized)
+- [Part 4: PC Inference — PyTorch (Non-Optimized)](#part-4-pc-inference--pytorch-run_inference_pc)
+- [End-to-End Inference Flow](#end-to-end-inference-flow)
+- [Output Directory Layout](#output-directory-layout)
+- [Configuration Reference](#configuration-reference)
+- [Function Reference](#function-reference)
+
+---
+
+## Project Structure
+
+```
+code/
+├── project_paths.py               # Portable path helpers (project root)
+├── generate_training_dataset_scripts/      # Training dataset generation pipeline
+├── run_inference_pc_optimized/    # Fast PC inference (ONNX + pipelined tiling)
+├── run_inference_pc/              # Simpler PC inference (PyTorch + ZIP tiles)
+├── Colab_Code_backup/             # Google Colab notebook cells (train + infer)
+├── real_layouts_tt/               # Input .oas layout files
+├── training_datasets/             # Training pipeline data per layout
+├── inference_results/             # Inference pipeline results per layout
+├── sky130_drc_deck/               # KLayout DRC rule deck
+├── ncsu_drcnn_weights.pth         # Trained model weights (after Colab training)
+└── ncsu_drcnn.onnx                # Exported ONNX model (after export_to_onnx.py)
+```
+
+All local scripts resolve paths from **`project_paths.py`**, which anchors everything to the repository root. You can run scripts from any working directory on any machine.
+
+---
 
 ## Prerequisites
-* **Python 3.x**
-* **KLayout** (Ensure the `KLAYOUT_CMD` path in `run_full_drc.py` matches your system installation)
-* **Sky130 DRC rule deck** (expected to be located at `sky130_drc_deck/run_drc_full.lydrc`)
 
-### Install Dependencies
-You can install the required Python packages using pip:
+| Component | Purpose |
+|---|---|
+| **Python 3.x** | All scripts |
+| **KLayout** | Layout I/O, DRC, geometric checks |
+| **Sky130 DRC deck** | `sky130_drc_deck/run_drc_full.lydrc` |
+| **PyTorch** | Training (Colab) and Grad-CAM |
+| **ONNX Runtime** | Fast batched inference on PC |
+| **OpenCV (`cv2`)** | Grad-CAM visualization and polygon extraction |
+
+### Install dependencies
+
 ```bash
-pip install numpy matplotlib klayout Pillow
+pip install numpy matplotlib klayout Pillow torch torchvision onnxruntime opencv-python scikit-learn seaborn
 ```
 
-## Execution Instructions
+### KLayout (portable setup)
 
-### 1. Run the Full Training Pipeline
+KLayout is auto-detected in this order:
 
-The pipeline is controlled through `run_flow.py` and supports three modes:
+1. `KLAYOUT_CMD` or `KLAYOUT` environment variable
+2. `klayout` on your system `PATH`
+3. Common install locations (Windows / macOS / Linux)
 
-**Run on the default layout** (`tt_um_cmos_inverter`):
-```bash
-python run_flow.py
+Example (Windows PowerShell):
+
+```powershell
+$env:KLAYOUT_CMD = "C:\Program Files\KLayout\klayout.exe"
 ```
 
-**Run on a specific layout by name** (must be a `.oas` file inside `real_layouts_tt/`):
+Example (Linux/macOS):
+
 ```bash
+export KLAYOUT_CMD=/usr/bin/klayout
+```
+
+---
+
+## Quick Start — Full Flows
+
+### Flow A — Generate training data (local PC)
+
+```bash
+cd generate_training_dataset_scripts
 python run_flow.py --layout tt_um_yen
-python run_flow.py --layout tt_um_8_bit_cpu
 ```
 
-**Run on all layouts** and produce one combined training dataset zip:
+### Flow B — Train CNN (Google Colab)
+
+1. Upload `training_dataset.zip` (from Flow A) to Colab
+2. Run cells in order: `load_training_dataset.py` → `define_cnn_model.py` → `train_cnn_model.py` → `draw_conf_matrix.py`
+3. Download `ncsu_drcnn_weights.pth`
+
+### Flow C — Export ONNX model (local PC)
+
 ```bash
+cd run_inference_pc_optimized
+python export_to_onnx.py
+```
+
+### Flow D — End-to-end CNN DRC on a layout (recommended)
+
+```bash
+cd run_inference_pc_optimized
+python run_end_to_end.py
+```
+
+This runs tile generation, ONNX inference, NMS, Grad-CAM, polygon extraction, and writes a violation GDS — all in one command.
+
+---
+
+## Part 1: Training Data Pipeline (`generate_training_dataset_scripts`)
+
+Automated pipeline: **extract M1 → inject errors → run DRC → extract mask → tile into labeled `.npy` matrices**.
+
+### Run the full pipeline
+
+```bash
+cd generate_training_dataset_scripts
+
+# Default layout (tt_um_cmos_inverter)
+python run_flow.py
+
+# Specific layout
+python run_flow.py --layout tt_um_yen
+
+# All layouts → combined dataset
 python run_flow.py --all
 ```
 
-When `--all` is used, each layout is processed individually and its tiles are saved under `outputs/<layout_name>/training_dataset/`. All tiles are then merged into `outputs/combined_training_dataset/` (with a per-layout filename prefix to avoid collisions) and a single `combined_training_dataset.zip` archive is created.
+### Pipeline steps (via `run_flow.py`)
 
-### 2. Visualize Training Data (Sanity Check)
-If you want to run the dataset visualizer independently without regenerating the data:
-```bash
-python visualize_dataset_matrices.py
-```
+| Step | Script | What it does |
+|---|---|---|
+| 1 | `extract_m1.py` | Flatten hierarchy, extract layer 68/20 (M1), write `{layout}_M1.gds` |
+| 2 | `inject_drc_error.py` | Inject isolated m1.2 spacing violations, mark on layer 255/0 |
+| 3 | `run_full_drc.py` | Run KLayout DRC in batch mode, write RDB report |
+| 4 | `extract_drc_mask_from_rdb.py` | Parse RDB, extract m1.2 violations to mask GDS |
+| 5 | `generate_training_dataset.py` | Tile layout into clean/dirty `.npy` matrices |
+| 6 | `visualize_dataset_matrices.py` | Sanity-check random clean vs. violation tiles |
 
-### 3. Generate Inference Dataset
-To slice an existing, un-injected layout into overlapping tiles for model inference:
+### Standalone utilities
+
 ```bash
+# Generate inference tiles (individual tile_x{x}_y{y}.npy files)
 python generate_inference_dataset.py
+
+# Visualize inference tiles
+python visualize_inference_dataset.py
+
+# Check m1.2 spacing violations with KLayout geometry engine
+python check_m1_spacing.py real_layouts_tt/tt_um_yen.oas violations.gds
+
+# Build GDS mask from CNN text report
+python build_cnn_violation_mask_gds.py --report inference_results/tt_um_yen_1err/drc_report.txt
 ```
 
-### 4. Visualize Inference Data
-To inspect specific layout tiles generated for inference (you can specify target coordinates inside the script):
+### Tiling parameters (training)
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `PHYSICAL_SIZE` | 512 nm | Physical window size |
+| `STRIDE` | 300 nm | Step between windows |
+| `IMAGE_SIZE` | 512 px | Rasterized matrix size |
+| `MARGIN` | 100 nm | Inner safe zone for clean/dirty classification |
+
+---
+
+## Part 2: Google Colab (`Colab_Code_backup`)
+
+Notebook-style cells for training and basic inference. Intended to run sequentially in Google Colab with GPU.
+
+### Colab workflow
+
+| File | Purpose |
+|---|---|
+| `load_training_dataset.py` | Unzip dataset, define `DRCDataset`, data augmentation |
+| `define_cnn_model.py` | `NCSU_DRCNN` architecture (200×200 input) |
+| `train_cnn_model.py` | Train with RMSprop, save `ncsu_drcnn_weights.pth` |
+| `draw_conf_matrix.py` | Confusion matrix and classification report on test set |
+| `run_inference.py` | Scan `inference_dataset/` tiles tile-by-tile with PyTorch |
+| `GRAD_CAM.py` | Grad-CAM heatmap generation (shared with PC code) |
+
+### Colab training steps
+
+1. Upload `training_dataset.zip` to Colab
+2. Run `load_training_dataset.py` — extracts to `data/clean/` and `data/dirty/`
+3. Run `define_cnn_model.py` then `train_cnn_model.py`
+4. Download `ncsu_drcnn_weights.pth`
+5. Optionally run `draw_conf_matrix.py` to evaluate
+
+### Colab inference steps
+
+1. Upload `ncsu_drcnn_weights.pth` and inference tiles (`inference_dataset/` folder)
+2. Run `define_cnn_model.py` then `run_inference.py`
+3. Output: `drc_report.txt` with flagged tile locations
+
+### CNN architecture (`NCSU_DRCNN`)
+
+4 convolution blocks (32→16→16→32 filters, MaxPool each) + FC (128 → 2 classes).
+
+- Input: `(1, 1, 200, 200)` for the original 1600nm / 200px tiling
+- Output: 2-class logits — **0 = clean**, **1 = violation**
+
+---
+
+## Part 3: PC Inference — Optimized (`run_inference_pc_optimized`)
+
+Production inference path optimized for speed on a local PC.
+
+### Key design
+
+- **Pipelined tile generation + inference** via producer/consumer threads and a `batch_queue`
+- **ONNX Runtime** for Phase 1 scanning (uses all CPU cores)
+- **PyTorch** only for Phase 2 Grad-CAM on flagged tiles
+- **NMS** merges overlapping detections from adjacent tiles
+- **Polygon extraction** maps Grad-CAM heatmaps back to layout coordinates
+
+### Scripts
+
+| File | Purpose |
+|---|---|
+| `generate_inference_dataset.py` | Tile layout; stream batches via `batch_queue` or save `tiles.npy` + `coords.npy` |
+| `define_cnn_model.py` | `NCSU_DRCNN` for 200×200 tiles |
+| `define_cnn_model_512.py` | `NCSU_DRCNN_512` for 512×512 tiles |
+| `export_to_onnx.py` | Export PyTorch weights to `ncsu_drcnn.onnx` |
+| `run_inference_ONNX.py` | Standalone: load `tiles.npy`, ONNX scan, Grad-CAM on hits |
+| `run_end_to_end.py` | **Full pipeline** — generation + inference + Grad-CAM + GDS |
+| `GRAD_CAM.py` | Grad-CAM class and 3-panel PNG export |
+
+### Run end-to-end (recommended)
+
 ```bash
-python visualize_inference_dataset.py
+cd run_inference_pc_optimized
+
+# 1. Export ONNX (once, after training)
+python export_to_onnx.py
+
+# 2. Edit LAYOUT_NAME in run_end_to_end.py, then:
+python run_end_to_end.py
 ```
+
+### `run_end_to_end.py` — two phases
+
+**Phase 1 — Generation + Inference (parallel threads)**
+
+```
+Producer thread                    Consumer thread
+─────────────────                  ─────────────────
+generate_inference_dataset()  →    ONNX batch inference
+  extract M1                         softmax → flag if prob ≥ threshold
+  slide 512nm windows                collect (x, y, prob, matrix)
+  push batches to queue
+```
+
+**Phase 2 — Grad-CAM + mask GDS (sequential)**
+
+For each NMS-merged violation:
+1. Run Grad-CAM → save 3-panel PNG under `gradcam_results/`
+2. Write `drc_report.txt` at the layout root
+3. Build `cnn_violation_mask.gds` and `{layout}_with_cnn_mask.gds`
+
+### Standalone ONNX inference (tiles already generated)
+
+```bash
+python generate_inference_dataset.py   # writes tiles.npy + coords.npy
+python run_inference_ONNX.py
+```
+
+### Optimized tiling parameters
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `PHYSICAL_SIZE` | 512 nm | Must match training if using 512 model |
+| `STRIDE` | 300 nm | Overlap between adjacent windows |
+| `IMAGE_SIZE` | 512 px | 1 nm/px resolution |
+| `BATCH_SIZE` | 256 | Tiles per ONNX batch |
+| `CONFIDENCE_THRESHOLD` | 0.80 | Minimum probability to flag violation |
+| `NMS_DISTANCE_THRESHOLD` | 1600 nm | Merge detections within this distance |
+
+---
+
+## Part 4: PC Inference — PyTorch (`run_inference_pc`)
+
+Simpler alternative without ONNX or pipelining. Reads tiles directly from `inference_dataset/`.
+
+```bash
+cd generate_training_dataset_scripts
+python generate_inference_dataset.py   # writes tile_x{x}_y{y}.npy files
+
+cd ../run_inference_pc
+python run_inference.py
+```
+
+Scans individual `tile_x{x}_y{y}.npy` files (or `tiles.npy` + `coords.npy`) and runs Grad-CAM on every flagged tile. Slower than the optimized path but easier to debug.
+
+---
+
+## End-to-End Inference Flow
+
+```
+real_layouts_tt/{layout}.oas
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  generate_inference_dataset.py          │
+│  • extract_m1() → M1-only GDS           │
+│  • slide window over layout             │
+│  • rasterize polygons → binary matrix   │
+└─────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  ONNX Inference (Phase 1)               │
+│  • batch tiles (256 at a time)          │
+│  • softmax → violation probability      │
+│  • flag tiles ≥ CONFIDENCE_THRESHOLD    │
+└─────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  NMS (apply_nms)                        │
+│  • merge overlapping tile detections    │
+└─────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  Grad-CAM (Phase 2)                     │
+│  • run on each unique violation tile    │
+│  • save 3-panel PNG per tile            │
+└─────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│  Report + Mask GDS                      │
+│  • write drc_report.txt (layout root)   │
+│  • build cnn_violation_mask.gds         │
+│  • merge → {layout}_with_cnn_mask.gds   │
+└─────────────────────────────────────────┘
+```
+
+### Before running inference
+
+1. Place layout in `real_layouts_tt/{name}.oas`
+2. Set `LAYOUT_NAME` in the target script
+3. Ensure `ncsu_drcnn_weights.pth` exists at project root
+4. Run `export_to_onnx.py` once to create `ncsu_drcnn.onnx`
+5. Run from `run_inference_pc_optimized/`:
+
+```bash
+python run_end_to_end.py
+```
+
+### Inference outputs per layout
+
+```
+inference_results/{layout_name}/
+├── inference_dataset/
+│   ├── tiles.npy              # optimized path (or tile_x{x}_y{y}.npy per tile)
+│   └── coords.npy             # optimized path
+├── gradcam_results/
+│   └── gradcam_x{x}_y{y}.png
+├── drc_report.txt             # CNN violation report (layout root)
+├── cnn_violation_mask.gds
+└── {layout}_with_cnn_mask.gds
+```
+
+---
+
+## Output Directory Layout
+
+```
+training_datasets/
+├── {layout_name}/
+│   ├── dataset_output/          # M1 extract, injected GDS, DRC report, mask
+│   └── training_dataset/        # clean/ + dirty/ .npy tiles + .zip
+└── combined_training_dataset/   # merged dataset from run_flow.py --all
+
+inference_results/
+└── {layout_name}/
+    ├── inference_dataset/       # inference tiles
+    ├── gradcam_results/         # Grad-CAM PNGs only
+    ├── drc_report.txt           # CNN violation report
+    ├── cnn_violation_mask.gds
+    └── {layout}_with_cnn_mask.gds
+```
+
+---
+
+## Configuration Reference
+
+Edit the `CONFIGURATION` block at the top of each script before running.
+
+| Script | Key settings |
+|---|---|
+| `run_flow.py` | `DEFAULT_LAYOUT_NAME`, `ERROR_COUNT` (400) |
+| `run_end_to_end.py` | `LAYOUT_NAME`, `CONFIDENCE_THRESHOLD`, `BATCH_SIZE`, `NMS_DISTANCE_THRESHOLD` |
+| `generate_training_dataset.py` | `PHYSICAL_SIZE`, `STRIDE`, `IMAGE_SIZE`, `MARGIN` |
+| `generate_inference_dataset.py` | `LAYOUT_NAME`, tiling parameters |
+| `inject_drc_error.py` | `M1_2_SPACING` (140 nm), `num_errors` |
+| `run_full_drc.py` | Auto-detect KLayout via `KLAYOUT_CMD` / `PATH` |
+
+---
+
+## Function Reference
+
+### `generate_training_dataset_scripts/`
+
+#### `extract_m1.py`
+
+| Function | Description |
+|---|---|
+| `extract_m1(input_file, output_dir)` | Load layout, recursively flatten M1 (68/20), merge polygons, write `{name}_M1.gds` |
+
+#### `inject_drc_error.py`
+
+| Function | Description |
+|---|---|
+| `snap_to_grid(value, grid=5)` | Snap coordinate to manufacturing grid |
+| `inject_isolated_m1_2_errors(input_file, num_errors=500)` | Place random rectangles that violate m1.2 spacing against nearby regular metal; mark on layer 255/0; write `{name}_m1_2_Marked.gds` |
+
+#### `run_full_drc.py`
+
+| Function | Description |
+|---|---|
+| `run_full_drc(input_gds, output_rdb)` | Launch KLayout in batch mode (`-b -r`), run Sky130 DRC deck, return `True` on success |
+
+#### `extract_drc_mask_from_rdb.py`
+
+| Function | Description |
+|---|---|
+| `extract_drc_mask_from_rdb(rdb_file, output_mask_file)` | Parse KLayout RDB, filter category `m1.2`, write violation polygons to layer 255/0; returns violation count |
+
+#### `generate_training_dataset.py`
+
+| Function | Description |
+|---|---|
+| `generate_dataset(input_layout, output_dir, tile_prefix="")` | Tile layout into clean/dirty `.npy` files using 3-state logic (center error → dirty, no error → clean, edge-only error → discard); balance clean samples; filter by metal density; returns `(dirty_count, clean_count)` |
+
+#### `generate_inference_dataset.py`
+
+| Function | Description |
+|---|---|
+| `generate_inference_dataset(input_gds, output_dir)` | Extract M1 (temp), slide window over layout, save one `tile_x{x}_y{y}.npy` per tile |
+
+#### `run_flow.py`
+
+| Function | Description |
+|---|---|
+| `build_paths(layout_name)` | Derive all file paths for a layout |
+| `clean_layout_folder(paths)` | Remove old output to prevent contamination |
+| `run_single_layout(layout_name, tile_prefix="")` | Execute all 6 pipeline steps for one layout |
+| `run_all_layouts()` | Process every `.oas` in `real_layouts_tt/`, merge into combined zip |
+| `main()` | CLI entry point (`--layout` or `--all`) |
+
+#### `visualize_dataset_matrices.py`
+
+| Function | Description |
+|---|---|
+| `visualize_dataset_matrices(clean_dir, dirty_dir)` | Display random clean vs. violation tile samples in matplotlib |
+
+#### `visualize_inference_dataset.py`
+
+| Function | Description |
+|---|---|
+| `visualize_inference_dataset(folder_path, coords_list, num_random)` | Inspect specific or random inference tiles |
+
+#### `check_m1_spacing.py`
+
+| Function | Description |
+|---|---|
+| `check_m1_spacing(input_gds, output_markers_gds=None)` | KLayout `space_check(140)` for m1.2; returns list of violations with spacing and coordinates |
+| `_write_violation_markers(...)` | Write cross markers at violation midpoints on layer 255/0 |
+
+#### `build_cnn_violation_mask_gds.py`
+
+| Function | Description |
+|---|---|
+| `parse_cnn_report(report_path, min_confidence)` | Parse `drc_report.txt` lines into `(x, y, confidence)` tuples |
+| `build_mask_and_merge(...)` | Create tile-sized violation boxes on mask layer; write standalone mask GDS and merged layout |
+| `main()` | CLI entry point |
+
+---
+
+### `run_inference_pc_optimized/`
+
+#### `generate_inference_dataset.py`
+
+| Function | Description |
+|---|---|
+| `generate_inference_dataset(input_gds, output_dir, batch_queue=None, batch_size=256)` | Extract M1 (temp), tile layout. If `batch_queue` is set → producer mode (stream batches). Always saves `tiles.npy` + `coords.npy` to `output_dir` |
+
+#### `define_cnn_model.py` / `define_cnn_model_512.py`
+
+| Class | Input size | Description |
+|---|---|---|
+| `NCSU_DRCNN` | 200×200 | 4 conv blocks + FC, binary classifier |
+| `NCSU_DRCNN_512` | 512×512 | Same architecture scaled for 512×512 tiles |
+
+#### `export_to_onnx.py`
+
+| Function | Description |
+|---|---|
+| `export_model()` | Load `.pth` weights, export to `ncsu_drcnn.onnx` with dynamic batch axis |
+
+#### `run_inference_ONNX.py`
+
+| Function | Description |
+|---|---|
+| `apply_nms(violations, distance_threshold)` | Greedy NMS by confidence; merge detections closer than threshold |
+| `run_inference_with_gradcam(tiles_dir, pth_weights, onnx_weights, threshold, gradcam_dir, report_path, batch_size, ...)` | Load `tiles.npy`, ONNX scan all tiles, NMS, Grad-CAM on hits, write report + mask GDS |
+
+#### `run_end_to_end.py`
+
+| Function | Description |
+|---|---|
+| `producer_thread(input_gds, batch_queue)` | Thread wrapper around `generate_inference_dataset` with queue |
+| `consumer_thread(onnx_weights, threshold, batch_queue, raw_violations_list)` | ONNX inference loop reading from queue |
+| `run_end_to_end()` | Orchestrate Phase 1 (parallel) + Phase 2 (Grad-CAM + mask GDS) |
+
+#### `GRAD_CAM.py`
+
+| Class / Function | Description |
+|---|---|
+| `GradCAM(model, target_layer)` | Register hooks on target conv layer |
+| `GradCAM.generate_heatmap(input_tensor, class_idx=1)` | Forward + backward pass → normalised heatmap |
+| `generate_gradcam(matrix, grad_cam, device, save_path, class_idx=1)` | Run Grad-CAM on one tile, save 3-panel PNG (original / heatmap / overlay), return heatmap array |
+
+---
+
+### `Colab_Code_backup/`
+
+#### `load_training_dataset.py`
+
+| Class | Description |
+|---|---|
+| `DRCDataset(root_dir, transform)` | PyTorch Dataset loading `.npy` tiles from `clean/` and `dirty/` folders |
+
+Data augmentation: horizontal/vertical flip, 90° rotation, random affine translate (10%).
+
+#### `train_cnn_model.py`
+
+| Function | Description |
+|---|---|
+| `train(epochs=20)` | RMSprop training loop with validation accuracy per epoch |
+
+#### `run_inference.py`
+
+| Function | Description |
+|---|---|
+| `scan_layout_from_zip(model, zip_file_path, threshold=0.5)` | Read `.npy` tiles from ZIP in memory, run PyTorch inference, write `drc_report.txt` |
+
+#### `draw_conf_matrix.py`
+
+Evaluates model on test set, plots confusion matrix heatmap, prints precision/recall report.
+
+---
+
+### `run_inference_pc/`
+
+#### `run_inference.py`
+
+| Function | Description |
+|---|---|
+| `run_inference_with_gradcam(tiles_dir, model_weights, threshold, gradcam_dir, report_path, ...)` | PyTorch inference over `inference_dataset/` tiles + Grad-CAM + mask GDS |
+
+---
+
+## Sky130 DRC Rule Reference
+
+The pipeline targets **rule m1.2**:
+
+| Rule | Description | Value |
+|---|---|---|
+| m1.2 | Minimum spacing of metal1 to metal1 | **0.140 µm (140 nm)** |
+
+Layer definitions used throughout the project:
+
+| Layer | Number | Purpose |
+|---|---|---|
+| met1 | 68/20 | Metal 1 geometry |
+| marking | 255/0 | Injected error markers / DRC mask |
+| CNN mask | 81/63 | CNN-detected violation regions |
+| tile windows | 81/8 | Inference tile boundaries in output GDS |

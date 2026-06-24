@@ -1,0 +1,22 @@
+# Generated datasets and inference outputs (regenerate locally)
+training_datasets/
+inference_results/
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Archives produced by pipelines
+*.zip
+
+# Logs and local validation artifacts
+validation_*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
