@@ -1,7 +1,6 @@
-# Generated datasets and inference outputs (regenerate locally)
-training_datasets/
+# Generated inference outputs (regenerate locally)
 inference_results/
-outputs/
+
 
 # Python
 __pycache__/

@@ -34,14 +34,13 @@ from build_cnn_violation_mask_gds import build_mask_and_merge, write_cnn_drc_rep
 # ---------------------------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------------------------
-LAYOUT_NAME = "tt_um_yen"
+LAYOUT_NAME = "tt_um_cmos_inverter"
 
 INPUT_GDS = layout_oas(LAYOUT_NAME)
 OUTPUT_DIR = inference_dataset_dir(LAYOUT_NAME)
 GRADCAM_DIR = gradcam_results_dir(LAYOUT_NAME)
 REPORT_PATH = cnn_drc_report_path(LAYOUT_NAME)
 CONFIDENCE_THRESHOLD = 0.80
-
 BATCH_SIZE = 256
 NMS_DISTANCE_THRESHOLD = 1600
 # ---------------------------------------------------------------------------
